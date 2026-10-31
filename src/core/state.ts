@@ -40,6 +40,7 @@ function isWork(record: RequestRecord): boolean {
 function requestState(record: RequestRecord, now: number, stallAfterMs: number): RequestState {
   switch (record.outcome) {
     case 'client_disconnected':
+    case 'cancelled':
       return 'cancelled';
     case 'upstream_error':
       return 'failed';

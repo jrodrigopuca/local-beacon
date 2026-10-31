@@ -1,5 +1,10 @@
 // Manual check of the core against a real ollama. Not part of `npm test`.
 // Usage: OLLAMA_URL=http://<host>:11434 node scripts/verify-remote.ts
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { createControlClient } from '../src/core/control-client.ts';
+import { createControlServer } from '../src/core/control.ts';
 import { type LoadedModel, probe } from '../src/core/ollama.ts';
 import { createProxy, type RequestRecord } from '../src/core/proxy.ts';
 import { serverState, type RequestView, viewRequests } from '../src/core/state.ts';
@@ -108,6 +113,35 @@ check('server is idle', serverState(idle.reachable, viewRequests(proxy.requests(
   await sleep(300);
   const states = viewRequests(proxy.requests(), Date.now()).slice(-2).map((view) => view.state);
   check('disconnected clients show as cancelled', states.every((state) => state === 'cancelled'), states);
+}
+
+// --- Control channel: the same view another process would get, and a real cancel
+{
+  const directory = mkdtempSync('/tmp/lbeacon-verify-');
+  const socketPath = join(directory, 'control.sock');
+  const control = createControlServer({ proxy, upstream: UPSTREAM, socketPath });
+  await control.listen();
+  const client = createControlClient(socketPath);
+
+  const essay = chatBody(MLX, 'Write a very long essay about the history of Rome.', { num_predict: 1500 }, { stream: true });
+  const running = post('/api/chat', essay).then(drain).then(() => 'finished', () => 'broken');
+  await sleep(1500);
+  const status = await client.status();
+  const view = (await client.requests()).at(-1) as RequestView;
+  check('socket reports the server as busy', status.server === 'busy', { server: status.server });
+  check('socket reports the request as generating', view.state === 'generating', { model: view.model });
+
+  check('socket cancels the request', await client.cancel(view.id));
+  check('the client sees a broken response', (await running) === 'broken');
+  const started = Date.now();
+  await drain(await post('/api/chat', chatBody(MLX, 'hi', {}, { stream: false })));
+  const followUpMs = Date.now() - started;
+  check('the model is free right after cancelling', followUpMs < 5000, { followUpMs });
+  const cancelled = (await client.requests()).find((request) => request.id === view.id);
+  check('the request shows as cancelled', cancelled?.state === 'cancelled', { outcome: cancelled?.outcome });
+
+  await control.close();
+  rmSync(directory, { recursive: true, force: true });
 }
 
 // --- Long prompt processing: no first byte yet, and is the probe still fine?

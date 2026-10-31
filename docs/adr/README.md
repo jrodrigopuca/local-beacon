@@ -10,6 +10,7 @@ pasa a `superseded`.
 | [0002](0002-proxy-pasivo.md) | El proxy observa y no altera | aceptada |
 | [0003](0003-runa-como-terceros.md) | Runa se evalúa como dependencia de terceros | aceptada |
 | [0004](0004-un-paquete-privado.md) | Un solo paquete, sin publicar por ahora | aceptada |
+| [0005](0005-canal-por-socket-unix.md) | El proxy se controla con HTTP sobre un socket Unix | aceptada |
 
 ## Pendientes
 

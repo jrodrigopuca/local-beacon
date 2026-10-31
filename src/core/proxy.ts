@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 
 import { inspectRequest, readUsage, type Usage } from './inspect.ts';
 
-export type RequestOutcome = 'in_flight' | 'done' | 'client_disconnected' | 'upstream_error';
+export type RequestOutcome = 'in_flight' | 'done' | 'client_disconnected' | 'cancelled' | 'upstream_error';
 
 /** What the proxy remembers about a request. Metadata only: never the body. */
 export interface RequestRecord {
@@ -39,6 +39,8 @@ export interface BeaconProxy {
   listen(): Promise<{ host: string; port: number }>;
   close(): Promise<void>;
   requests(): RequestRecord[];
+  /** Cuts a request in flight on both sides. False when it is not in flight. */
+  cancel(id: string): boolean;
 }
 
 const DEFAULT_HOST = '127.0.0.1';
@@ -98,6 +100,7 @@ export function createProxy(options: ProxyOptions): BeaconProxy {
   const host = options.host ?? DEFAULT_HOST;
   const maxRecords = options.maxRecords ?? DEFAULT_MAX_RECORDS;
   const records = new Map<string, RequestRecord>();
+  const cancellers = new Map<string, () => void>();
 
   function remember(record: RequestRecord): void {
     records.set(record.id, record);
@@ -148,6 +151,7 @@ export function createProxy(options: ProxyOptions): BeaconProxy {
       record.outcome = outcome;
       record.errorCode = code;
       record.endedAt = Date.now();
+      cancellers.delete(record.id);
     };
 
     const upstreamReq = http.request(
@@ -191,6 +195,12 @@ export function createProxy(options: ProxyOptions): BeaconProxy {
       },
     );
 
+    cancellers.set(record.id, () => {
+      settle('cancelled');
+      // Its 'close' handler below tears down the upstream side.
+      clientRes.destroy();
+    });
+
     upstreamReq.on('error', (error) => {
       if (record.outcome !== 'in_flight') return;
       const code = errorCode(error);
@@ -233,5 +243,10 @@ export function createProxy(options: ProxyOptions): BeaconProxy {
         server.closeAllConnections();
       }),
     requests: () => [...records.values()].map((record) => ({ ...record })),
+    cancel: (id) => {
+      const cancelRequest = cancellers.get(id);
+      cancelRequest?.();
+      return cancelRequest !== undefined;
+    },
   };
 }
