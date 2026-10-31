@@ -7,10 +7,22 @@ and the server and shows you.
 
 The commands will be `local-beacon` and its shortcut `lbeacon`.
 
-**Status: the core exists, with nothing to run yet.** It is a library inside this
-repo, checked with `npm test` and, against a real server, with
-`OLLAMA_URL=http://<host>:11434 node scripts/verify-remote.ts`. The CLI comes next,
-then the MCP server.
+**Status: usable from this repo, not published.** It needs Node 26, runs from source,
+and depends on a beta of [Runa](FRICTION.md).
+
+```sh
+export OLLAMA_URL=http://<host>:11434
+node src/cli/main.ts proxy           # leave it running
+node src/cli/main.ts watch           # in another terminal
+node src/cli/main.ts status          # also: requests, cancel <id>
+node src/cli/main.ts --mcp           # MCP server: status, requests, cancel
+```
+
+Point your client at the proxy instead of ollama: `OLLAMA_URL=http://127.0.0.1:11500`.
+
+`npm test` checks everything against fake servers. To check against a real one:
+`OLLAMA_URL=http://<host>:11434 node scripts/verify-remote.ts`, and the same with
+`scripts/verify-cli.ts`.
 
 ## Planned layers
 
