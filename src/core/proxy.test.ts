@@ -249,6 +249,67 @@ describe('createProxy', () => {
     assert.doesNotMatch(stored, /response-secret/);
   });
 
+  it('keeps prompt facts and usage, not the content they come from', async () => {
+    const upstream = await startUpstream(async (req, res) => {
+      for await (const _ of req);
+      res.write('{"message":{"content":"response-secret"},"done":false}\n');
+      res.end('{"done":true,"prompt_eval_count":12,"eval_count":4,"eval_duration":2000000000}\n');
+    });
+    const { proxy, port } = await startProxy(upstream.url);
+    const payload = { model: 'qwen3.5:4b', messages: [{ role: 'user', content: 'prompt-secret' }] };
+
+    await send(port, '/api/chat', Buffer.from(JSON.stringify(payload)));
+    const record = await settled(proxy);
+
+    assert.equal(record.model, 'qwen3.5:4b');
+    assert.equal(record.promptChars, 'prompt-secret'.length);
+    assert.deepEqual(record.usage, { promptTokens: 12, cachedTokens: null, outputTokens: 4, tokensPerSecond: 2 });
+    assert.doesNotMatch(JSON.stringify(record), /secret/);
+  });
+
+  it('finds usage across a chunk boundary', async () => {
+    const line = '{"done":true,"prompt_eval_count":1234}\n';
+    const upstream = await startUpstream((_req, res) => {
+      res.write(line.slice(0, 25));
+      setTimeout(() => res.end(line.slice(25)), 5);
+    });
+    const { proxy, port } = await startProxy(upstream.url);
+
+    await send(port, '/api/chat', Buffer.from('{}'));
+
+    assert.equal((await settled(proxy)).usage?.promptTokens, 1234);
+  });
+
+  it('reads the prompt before the response when the body comes in several chunks', async () => {
+    const upstream = await startUpstream(async (req, res) => {
+      for await (const _ of req);
+      res.end('{}');
+    });
+    const { proxy, port } = await startProxy(upstream.url);
+    const text = 'x'.repeat(200_000);
+
+    await send(port, '/api/chat', Buffer.from(JSON.stringify({ model: 'm', prompt: text })));
+
+    assert.equal((await settled(proxy)).promptChars, text.length);
+  });
+
+  it('forwards a body that is not JSON and records no prompt facts', async () => {
+    let received = '';
+    const upstream = await startUpstream(async (req, res) => {
+      for await (const part of req) received += String(part);
+      res.end('ok');
+    });
+    const { proxy, port } = await startProxy(upstream.url);
+
+    const response = await send(port, '/api/chat', Buffer.from('not json'));
+
+    assert.equal(response.status, 200);
+    assert.equal(received, 'not json');
+    const record = await settled(proxy);
+    assert.equal(record.model, null);
+    assert.equal(record.usage, null);
+  });
+
   it('evicts the oldest finished records and keeps in-flight ones', async () => {
     let release: () => void = () => {};
     const upstream = await startUpstream((req, res) => {

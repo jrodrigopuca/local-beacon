@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { inspectRequest, readUsage, type Usage } from './inspect.ts';
+
 export type RequestOutcome = 'in_flight' | 'done' | 'client_disconnected' | 'upstream_error';
 
 /** What the proxy remembers about a request. Metadata only: never the body. */
@@ -18,6 +20,9 @@ export interface RequestRecord {
   endedAt: number | null;
   outcome: RequestOutcome;
   errorCode: string | null;
+  model: string | null;
+  promptChars: number | null;
+  usage: Usage | null;
 }
 
 export interface ProxyOptions {
@@ -39,6 +44,12 @@ export interface BeaconProxy {
 const DEFAULT_HOST = '127.0.0.1';
 // Provisional, my own judgment: enough for a long session, small enough to ignore.
 const DEFAULT_MAX_RECORDS = 1000;
+// Bodies and response tails are read in passing and dropped; nothing below is stored.
+// Provisional, my own judgment: base64 images can get large, and past this limit the
+// request just loses its prompt facts.
+const MAX_INSPECTED_BODY_BYTES = 64 * 1024 * 1024;
+// Usage sits in the last line or at the end of the body, a few hundred bytes.
+const RESPONSE_TAIL_CHARS = 8192;
 
 // Per-connection headers: each side of the proxy negotiates its own connection.
 // Everything else, and every body byte, passes through untouched.
@@ -110,8 +121,26 @@ export function createProxy(options: ProxyOptions): BeaconProxy {
       endedAt: null,
       outcome: 'in_flight',
       errorCode: null,
+      model: null,
+      promptChars: null,
+      usage: null,
     };
     remember(record);
+
+    let body: Buffer[] | null = [];
+    let bodyBytes = 0;
+    clientReq.on('data', (chunk: Buffer) => {
+      bodyBytes += chunk.length;
+      if (bodyBytes > MAX_INSPECTED_BODY_BYTES) body = null;
+      body?.push(chunk);
+    });
+    clientReq.on('end', () => {
+      if (body === null) return;
+      const { model, promptChars } = inspectRequest(Buffer.concat(body));
+      record.model = model;
+      record.promptChars = promptChars;
+      body = null;
+    });
 
     // First cause wins: tearing one side down makes the other report an error too.
     const settle = (outcome: RequestOutcome, code: string | null = null): void => {
@@ -136,12 +165,20 @@ export function createProxy(options: ProxyOptions): BeaconProxy {
         record.status = upstreamRes.statusCode ?? null;
         clientRes.writeHead(upstreamRes.statusCode ?? 502, responseHeaders(upstreamRes.rawHeaders));
 
+        // latin1 maps bytes one to one, so a multi-byte character split across chunks
+        // cannot corrupt the ASCII numbers this tail is kept for.
+        let tail = '';
         upstreamRes.on('data', (chunk: Buffer) => {
           const now = Date.now();
           record.firstByteAt ??= now;
           record.lastByteAt = now;
           record.chunks += 1;
           record.bytes += chunk.length;
+          tail = (tail + chunk.toString('latin1')).slice(-RESPONSE_TAIL_CHARS);
+        });
+        upstreamRes.on('end', () => {
+          record.usage = readUsage(tail);
+          tail = '';
         });
 
         upstreamRes.on('error', (error) => {

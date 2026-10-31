@@ -7,8 +7,9 @@ and the server and shows you.
 
 The commands will be `local-beacon` and its shortcut `lbeacon`.
 
-**Status: nothing to run yet.** The repo holds the spike that justifies the
-design and the decisions taken from it. The core comes first, then the CLI,
+**Status: the core exists, with nothing to run yet.** It is a library inside this
+repo, checked with `npm test` and, against a real server, with
+`OLLAMA_URL=http://<host>:11434 node scripts/verify-remote.ts`. The CLI comes next,
 then the MCP server.
 
 ## Planned layers
@@ -23,6 +24,8 @@ mcp    status snapshots and separate action tools, built on the core
 
 - [`docs/spikes/2026-10-31-observar-ollama.md`](docs/spikes/2026-10-31-observar-ollama.md):
   what can and cannot be observed, measured against a real server.
+- [`docs/spikes/2026-10-31-calibrar-truncado.md`](docs/spikes/2026-10-31-calibrar-truncado.md):
+  how a prompt cut without notice is detected.
 - [`docs/adr/`](docs/adr/): the decisions that shape the repo.
 
 ## License

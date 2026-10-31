@@ -45,8 +45,9 @@ final del prompt.
 - `llamacpp` truncó sin error y sin un campo que lo diga. Su `done_reason: length`
   lo causó el límite de 40 tokens de salida, no el truncado.
 - `mlx` no aplicó el límite pedido.
-- `context_length` no es el límite efectivo: informó 2048 y truncó cerca de 1024.
-  La causa no se investigó.
+- **Corregido:** acá decía que `context_length` no era el límite efectivo. Sí lo
+  es. Truncó porque el prompt superó 2048, y lo que deja es la mitad más dos. Ver
+  [la calibración](2026-10-31-calibrar-truncado.md).
 
 ## Conclusiones
 
@@ -56,7 +57,8 @@ final del prompt.
 - "En cola" se puede inferir si hay otro pedido en curso, solo cuando todo el
   tráfico pasa por el proxy.
 - Detectar truncado exige comparar `prompt_eval_count` con una estimación de
-  tokens del cliente. El umbral falta medirlo.
+  tokens del cliente. El umbral se midió en
+  [la calibración](2026-10-31-calibrar-truncado.md).
 - `control.py` en `local-sidekicks` pide `"stream": False`: por el proxy se vería
   "esperando" hasta el final, sin tokens por segundo.
 
