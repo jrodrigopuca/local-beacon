@@ -1,0 +1,11 @@
+{
+  "name": "local-beacon",
+  "version": "0.0.0",
+  "description": "See what a remote ollama is doing, and talk to it from outside.",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=26"
+  }
+}
