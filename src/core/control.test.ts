@@ -271,6 +271,15 @@ describe('control channel', () => {
     await assert.rejects(createControlClient(socketPath).status(), ProxyNotRunning);
   });
 
+  it('treats a proxy that goes away while answering as not running', async () => {
+    const socketPath = join(tempDirectory(), 'control.sock');
+    const dying = net.createServer((connection) => connection.destroy());
+    dying.listen(socketPath);
+    await once(dying, 'listening');
+    cleanups.push(() => new Promise((resolve) => dying.close(() => resolve())));
+    await assert.rejects(createControlClient(socketPath).status(), ProxyNotRunning);
+  });
+
   it('accepts any id without breaking the request', async () => {
     const { client } = await stack();
     assert.equal(await client.cancel('a b/c?'), false);

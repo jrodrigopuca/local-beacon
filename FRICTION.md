@@ -5,6 +5,11 @@ Registro de lo que encuentra un usuario nuevo, según el
 observado, sin leer el código. Versión evaluada: `0.2.0-beta.2`, con Node 26 y npm 12.
 Los resultados de `0.1.0` no cuentan.
 
+**Estado en `0.2.0-beta.3`:** F-01, F-02, F-03, F-04, F-06, F-09, F-10 y F-12 quedaron
+resueltas. F-05, F-07, F-08, F-11, F-13 y F-14 siguen abiertas. Detalle en
+[`docs/feedback-runa-0.2.0-beta.3.md`](docs/feedback-runa-0.2.0-beta.3.md). Las entradas de
+abajo describen lo observado en beta.2.
+
 Nivel: **alto** condiciona el diseño, **medio** obliga a un rodeo, **bajo** es una
 molestia. El código de la prueba está en cada entrada cuando hace falta.
 

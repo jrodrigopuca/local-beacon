@@ -22,22 +22,25 @@ interface Answer {
   body: unknown;
 }
 
+/** Nothing listens, or the proxy went away while it was answering. */
+const PROXY_GONE = new Set(['ENOENT', 'ECONNREFUSED', 'ECONNRESET', 'EPIPE']);
+
 export function createControlClient(socketPath: string = defaultSocketPath()): ControlClient {
   function call(method: string, path: string): Promise<Answer> {
     return new Promise((resolve, reject) => {
+      const fail = (error: NodeJS.ErrnoException): void => {
+        reject(PROXY_GONE.has(error.code ?? '') ? new ProxyNotRunning(socketPath) : error);
+      };
       const req = http.request({ socketPath, method, path }, (res) => {
         const parts: Buffer[] = [];
         res.on('data', (part: Buffer) => parts.push(part));
-        res.on('error', reject);
+        res.on('error', fail);
         res.on('end', () => {
           const text = Buffer.concat(parts).toString('utf8');
           resolve({ status: res.statusCode ?? 0, body: JSON.parse(text) });
         });
       });
-      req.on('error', (error: NodeJS.ErrnoException) => {
-        const absent = error.code === 'ENOENT' || error.code === 'ECONNREFUSED';
-        reject(absent ? new ProxyNotRunning(socketPath) : error);
-      });
+      req.on('error', fail);
       req.end();
     });
   }

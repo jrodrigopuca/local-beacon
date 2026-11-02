@@ -130,7 +130,9 @@ describe('lbeacon', () => {
     await once(running, 'response');
 
     const listed = await lbeacon(['requests', '--json'], env);
-    const [row] = JSON.parse(listed.stdout) as Array<{ id: string; state: string; model: string }>;
+    const { requests: [row] } = JSON.parse(listed.stdout) as {
+      requests: Array<{ id: string; state: string; model: string }>;
+    };
     assert.equal(row?.state, 'generating');
     assert.equal(row?.model, 'qwen3.5:4b');
     assert.doesNotMatch(listed.stdout, /prompt-secret/);
@@ -157,7 +159,8 @@ describe('lbeacon', () => {
       });
     }
     const result = await lbeacon(['requests', '--json', '--limit', '2'], { LBEACON_SOCKET: socket });
-    assert.deepEqual((JSON.parse(result.stdout) as Array<{ path: string }>).map((row) => row.path), ['/b', '/c']);
+    const { requests } = JSON.parse(result.stdout) as { requests: Array<{ path: string }> };
+    assert.deepEqual(requests.map((row) => row.path), ['/b', '/c']);
   });
 
   it('stops the proxy cleanly on SIGINT and removes its socket', async () => {
