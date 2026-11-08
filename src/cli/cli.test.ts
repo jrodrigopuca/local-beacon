@@ -61,19 +61,23 @@ async function freePort(): Promise<number> {
   return port;
 }
 
-async function startProxy(socket: string): Promise<{ child: ChildProcess; port: number }> {
+async function startProxy(socket: string): Promise<{ child: ChildProcess; port: number; stderr: () => string }> {
   const upstream = await fakeOllama();
   const port = await freePort();
   const child = spawn('node', [MAIN, 'proxy', '--port', String(port)], {
     env: { ...process.env, OLLAMA_URL: upstream, LBEACON_SOCKET: socket },
-    stdio: ['ignore', 'pipe', 'inherit'],
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
   cleanups.push(() => {
     child.kill('SIGKILL');
   });
+  let stderr = '';
+  child.stderr?.on('data', (part) => {
+    stderr += String(part);
+  });
   const [started] = (await once(child.stdout as NodeJS.ReadableStream, 'data')) as [Buffer];
   assert.match(started.toString(), /proxy on http:\/\/127\.0\.0\.1/);
-  return { child, port };
+  return { child, port, stderr: () => stderr };
 }
 
 describe('lbeacon', () => {
@@ -165,13 +169,17 @@ describe('lbeacon', () => {
 
   it('stops the proxy cleanly on SIGINT and removes its socket', async () => {
     const socket = socketPath();
-    const { child } = await startProxy(socket);
+    const { child, stderr } = await startProxy(socket);
     assert.equal(existsSync(socket), true);
 
     child.kill('SIGINT');
-    const [code] = (await once(child, 'exit')) as [number | null];
+    const [code, signal] = (await once(child, 'exit')) as [number | null, NodeJS.Signals | null];
 
-    assert.equal(code, 130);
+    // Since Runa 0.2.0-beta.6 a clean stop dies by the signal (a shell still sees 130),
+    // so supervisors such as systemd count it as clean.
+    assert.equal(code, null);
+    assert.equal(signal, 'SIGINT');
+    assert.doesNotMatch(stderr(), /Interrupted/);
     assert.equal(existsSync(socket), false);
   });
 
@@ -224,8 +232,9 @@ describe('lbeacon', () => {
 
     const interrupted = Date.now();
     child.kill('SIGINT');
-    const [code] = (await once(child, 'exit')) as [number | null];
-    assert.equal(code, 130);
+    const [code, signal] = (await once(child, 'exit')) as [number | null, NodeJS.Signals | null];
+    assert.equal(code, null);
+    assert.equal(signal, 'SIGINT');
     // Runa stops waiting after 2 s; a watch that follows the signal leaves well before that.
     assert.ok(Date.now() - interrupted < 1500);
   });

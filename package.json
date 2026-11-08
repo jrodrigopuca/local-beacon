@@ -26,9 +26,9 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@runa-cmd/core": "0.2.0-beta.5",
-    "@runa-cmd/help": "0.2.0-beta.5",
-    "@runa-cmd/mcp": "0.2.0-beta.5",
+    "@runa-cmd/core": "0.2.0-beta.6",
+    "@runa-cmd/help": "0.2.0-beta.6",
+    "@runa-cmd/mcp": "0.2.0-beta.6",
     "zod": "4.6.7"
   }
 }

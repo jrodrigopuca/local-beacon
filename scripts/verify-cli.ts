@@ -110,8 +110,9 @@ console.log(`     (unloaded in ${Date.now() - started} ms)`);
 
 // --- Proxy gone
 proxy.kill('SIGINT');
-const [proxyCode] = (await once(proxy, 'exit')) as [number | null];
-check('proxy stops on SIGINT', proxyCode === 130, { proxyCode });
+// Since Runa 0.2.0-beta.6 a clean stop dies by the signal instead of exiting 130.
+const [proxyCode, proxySignal] = (await once(proxy, 'exit')) as [number | null, NodeJS.Signals | null];
+check('proxy stops on SIGINT', proxyCode === null && proxySignal === 'SIGINT', { proxyCode, proxySignal });
 const gone = await tool('status');
 check('status tool explains the proxy is not running', gone.result.isError === true && /not running/.test(gone.result.content?.[0]?.text), {
   text: gone.result.content?.[0]?.text,

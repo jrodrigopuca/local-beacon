@@ -17,6 +17,10 @@ el comportamiento. F-11 se cerró por decisión de runa-cmd, ya que `format` cub
 Siguen abiertas F-05, que se comprueba al publicar la 1.0, y F-07, que es lo próximo de
 runa-cmd y tiene una medición en launchd en su entrada.
 
+**Estado en `0.2.0-beta.6`:** F-07 quedó resuelta. Al actualizar hubo que cambiar dos tests y
+un script que leían `code === 130` de un `spawn`: ahora llega `code: null` y
+`signal: 'SIGINT'`. Lo había anunciado runa-cmd. Sigue abierta F-05.
+
 Nivel: **alto** condiciona el diseño, **medio** obliga a un rodeo, **bajo** es una
 molestia. El código de la prueba está en cada entrada cuando hace falta.
 
@@ -109,6 +113,14 @@ molestia. El código de la prueba está en cada entrada cuando hace falta.
 
   Con esa opción, entonces, un servicio de Runa no se puede parar desde afuera sin que
   launchd lo vuelva a levantar. systemd no lo probé, porque no tengo Linux.
+- **Resuelta en beta.6.** Repetí la prueba con los mismos casos:
+  - **Sin `KeepAlive`:** launchd registra `last terminating signal = Terminated: 15`, o
+    `Interrupt: 2` ante SIGINT, en lugar de un exit code. El log de stderr queda vacío.
+  - **Con `SuccessfulExit: false` y `launchctl kill`:** lo sigue reiniciando, porque launchd
+    reinicia cualquier proceso que no sale con 0. No depende de Runa.
+  - **La forma de pararlo:** `launchctl bootout` descarga el agente, no lo reinicia, corre
+    `cleanup` y no escribe nada en stderr.
+  - **En la shell:** `$?` sigue siendo 143.
 
 ### F-08 · bajo · El error por opción faltante no menciona su variable de entorno
 
