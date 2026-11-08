@@ -10,9 +10,9 @@ TypeScript 7.0 y Zod 4.6 en macOS:
 
 - **`local-beacon`:** CLI y MCP reales sobre un Ollama remoto. Detalle en
   [`FRICTION.md`](../FRICTION.md), con las referencias `F-nn`.
-- **`notes`:** CLI hecho para esta evaluación por otro agente, sin conocer los resultados
-  anteriores. Cubre configuración, comandos anidados, middleware, plugins, help,
-  completions, tests y empaquetado. Referencias `H-nn`.
+- **CLI de prueba:** un CLI mínimo aparte, hecho sin conocer los resultados anteriores.
+  Cubre configuración, comandos anidados, middleware, plugins, help, completions, tests y
+  empaquetado. Referencias `H-nn`.
 
 Confirmación: **ambas** significa que el hallazgo salió por separado o que se reprodujo de
 forma independiente; **una** significa que se observó solo en esa evaluación.
@@ -70,7 +70,7 @@ Invalid value for --priority: expected array
 Run 'verify --help' for usage.              # exit 2, y nunca se escribió --priority
 ```
 
-En `notes`, un `tag` pensado para `add` convirtió a `list` en un filtro: salida vacía y
+En el CLI de prueba, un `tag` pensado para `add` convirtió a `list` en un filtro: salida vacía y
 exit 0. Los errores deberían nombrar la fuente, como `verify.config.json: "priority"`.
 
 ## Conviene resolver antes de estable
@@ -86,7 +86,7 @@ exit 0. Los errores deberían nombrar la fuente, como `verify.config.json: "prio
 | F-03 | Una | `meta.name` es obligatorio pero no define el comando. `with-output` da 127 y sugiere `withOutput` | Comandos de una palabra |
 | F-05 | Una | El README no está en el registro de npm, en ningún paquete ni versión | `npm pack` |
 | H5 | Una | El ejemplo de Layer 3 de help no compila en TS estricto; con un cast, crashea en un CLI de un solo comando; y `styled(x, { color: theme.primary })` pierde el color | `defaultRenderer` y hex directo |
-| H7 | Una | `eval "$(notes completions zsh)"`, sugerido por `--instructions`, da error en cada shell y deja TAB sin completar | Instalar por `fpath` |
+| H7 | Una | `eval "$(tool completions zsh)"`, sugerido por `--instructions`, da error en cada shell y deja TAB sin completar | Instalar por `fpath` |
 | H8 | Una | Un `]` en una descripción deja a todo el comando sin completado en zsh, y un enum con espacio se parte en dos. El README promete valores escapados | Evitar esos caracteres |
 | H9 | Una | Por MCP, una opción con `env` sale del schema, y si el modelo la envía se descarta con éxito. Está documentado, pero un config en el directorio cambia el schema, y una clave desconocida sí da error | `expose` |
 | H10 | Una | El `--help` del plugin emite bold y dim hacia un pipe y con `NO_COLOR=1`. `theme.secondary` no cambia el render por defecto | Ninguno |
@@ -126,7 +126,7 @@ por MCP?
 - Conviven `Invalid value for --limit: expected number` y `limit: Too small: expected
   number to be >0`, que expone Zod y la clave interna.
 - Un JSON roto en el config sale como `Unexpected error`, cuando es un error del usuario.
-- `notes --bogus` da `Command not found` y 127; debería ser `Unknown option` y 2.
+- `tool --bogus` da `Command not found` y 127; debería ser `Unknown option` y 2.
 - `nada` sugiere `add`: la distancia de sugerencia es generosa.
 - Falta mencionar la variable de entorno al faltar una opción (F-08).
 - `-t=a` guarda `=a`.
