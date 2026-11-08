@@ -93,6 +93,14 @@ describe('formatStatus', () => {
     const output = formatStatus({ server: 'down', probe: { reachable: false, reason: 'refused', detail: 'ECONNREFUSED' } });
     assert.match(output, /server\s+down/);
     assert.match(output, /refused \(ECONNREFUSED\)/);
+    assert.doesNotMatch(output, /not like ollama/);
+  });
+
+  it('says a server that answers wrong is not ollama, instead of down', () => {
+    const probe = { reachable: false, reason: 'bad_response', detail: '/api/version answered 404' } as const;
+    const output = formatStatus({ server: 'unknown', probe });
+    assert.match(output, /server\s+unknown/);
+    assert.match(output, /not like ollama/);
   });
 
   it('says when no model is loaded', () => {

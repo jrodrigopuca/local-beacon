@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 
 import { probe, type ProbeResult } from './ollama.ts';
 import type { BeaconProxy } from './proxy.ts';
-import { type RequestView, type ServerState, serverState, viewRequests } from './state.ts';
+import { health, type RequestView, type ServerState, serverState, viewRequests } from './state.ts';
 
 export interface StatusSnapshot {
   server: ServerState;
@@ -112,7 +112,7 @@ export function createControlServer(options: ControlOptions): ControlServer {
       if (req.method !== 'GET') return reply(res, 405, { error: 'use GET' });
       const { requests, result } = await views();
       if (path === '/requests') return reply(res, 200, { requests });
-      const snapshot: StatusSnapshot = { server: serverState(result.reachable, requests), probe: result };
+      const snapshot: StatusSnapshot = { server: serverState(health(result), requests), probe: result };
       return reply(res, 200, snapshot);
     }
 

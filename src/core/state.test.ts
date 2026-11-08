@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import type { RequestRecord } from './proxy.ts';
-import { DEFAULT_STALL_AFTER_MS, serverState, viewRequests } from './state.ts';
+import { DEFAULT_STALL_AFTER_MS, health, isWork, serverState, viewRequests } from './state.ts';
 
 const NOW = 1_000_000;
 
@@ -134,34 +134,58 @@ describe('serverState', () => {
   const stalled = record({ firstByteAt: NOW - 90_000, lastByteAt: NOW - 90_000 });
 
   it('is idle when reachable with nothing in flight', () => {
-    assert.equal(serverState(true, views()), 'idle');
-    assert.equal(serverState(true, views(record({ outcome: 'done', status: 200, endedAt: NOW }))), 'idle');
+    assert.equal(serverState('up', views()), 'idle');
+    assert.equal(serverState('up', views(record({ outcome: 'done', status: 200, endedAt: NOW }))), 'idle');
   });
 
   it('is down when unreachable with nothing in flight', () => {
-    assert.equal(serverState(false, views()), 'down');
+    assert.equal(serverState('down', views()), 'down');
   });
 
   it('is busy when reachable with work in flight, even if no byte arrived yet', () => {
-    assert.equal(serverState(true, views(record())), 'busy');
-    assert.equal(serverState(true, views(stalled)), 'busy');
+    assert.equal(serverState('up', views(record())), 'busy');
+    assert.equal(serverState('up', views(stalled)), 'busy');
   });
 
   it('stays busy when the probe fails but bytes are still arriving', () => {
-    assert.equal(serverState(false, views(generating)), 'busy');
+    assert.equal(serverState('down', views(generating)), 'busy');
   });
 
   it('is down when the probe fails and the work in flight went silent', () => {
-    assert.equal(serverState(false, views(stalled)), 'down');
-    assert.equal(serverState(false, views(record())), 'down');
+    assert.equal(serverState('down', views(stalled)), 'down');
+    assert.equal(serverState('down', views(record())), 'down');
+  });
+
+  it('is unknown, not down, when something answers but not like ollama', () => {
+    assert.equal(serverState('foreign', views()), 'unknown');
+    assert.equal(serverState('foreign', views(record())), 'busy');
+    assert.equal(serverState('foreign', views(generating)), 'busy');
   });
 
   it('ignores read-only routes, with or without a query string', () => {
-    assert.equal(serverState(true, views(record({ path: '/api/ps' }))), 'idle');
-    assert.equal(serverState(true, views(record({ path: '/api/tags?x=1' }))), 'idle');
+    assert.equal(serverState('up', views(record({ path: '/api/ps' }))), 'idle');
+    assert.equal(serverState('up', views(record({ path: '/api/tags?x=1' }))), 'idle');
   });
 
   it('counts unknown routes as work', () => {
-    assert.equal(serverState(true, views(record({ path: '/api/some-future-route' }))), 'busy');
+    assert.equal(serverState('up', views(record({ path: '/api/some-future-route' }))), 'busy');
+  });
+});
+
+describe('health', () => {
+  it('tells a server that answers wrong apart from one that does not answer', () => {
+    assert.equal(health({ reachable: true, version: '1', models: [] }), 'up');
+    assert.equal(health({ reachable: false, reason: 'bad_response', detail: '/api/version answered 404' }), 'foreign');
+    assert.equal(health({ reachable: false, reason: 'refused', detail: 'ECONNREFUSED' }), 'down');
+    assert.equal(health({ reachable: false, reason: 'timeout', detail: 'x' }), 'down');
+  });
+});
+
+describe('isWork', () => {
+  it('leaves cheap reads out and counts everything else', () => {
+    assert.equal(isWork({ path: '/api/chat' }), true);
+    assert.equal(isWork({ path: '/v1/chat/completions' }), true);
+    assert.equal(isWork({ path: '/api/show' }), false);
+    assert.equal(isWork({ path: '/api/version?x=1' }), false);
   });
 });

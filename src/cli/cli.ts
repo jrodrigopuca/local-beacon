@@ -6,6 +6,7 @@ import { mcpPlugin } from '@runa-cmd/mcp';
 import { createControlClient, ProxyNotRunning } from '../core/control-client.ts';
 import { createControlServer, defaultSocketPath } from '../core/control.ts';
 import { createProxy } from '../core/proxy.ts';
+import { isWork } from '../core/state.ts';
 import { formatRequests, formatStatus, type RequestRow, toRow } from './format.ts';
 
 const EXIT_NOT_RUNNING = 3;
@@ -19,7 +20,7 @@ const socketOption = {
 const socketMeta = { socket: { env: 'LBEACON_SOCKET', defaultDescription: '~/.local-beacon/control.sock' } };
 
 const statusOutput = z.object({
-  server: z.enum(['down', 'idle', 'busy']),
+  server: z.enum(['down', 'idle', 'busy', 'unknown']),
   probe: z.discriminatedUnion('reachable', [
     z.object({
       reachable: z.literal(true),
@@ -79,11 +80,16 @@ async function fromProxy<T>(call: () => Promise<T>): Promise<T> {
   }
 }
 
-async function readRows(socket: string, limit: number): Promise<RequestRow[]> {
+async function readRows(socket: string, limit: number, all: boolean): Promise<RequestRow[]> {
   const now = Date.now();
   const views = await createControlClient(socket).requests();
-  return views.slice(-limit).map((view) => toRow(view, now));
+  // Clients poll /api/version or /api/tags around every run: noise when asking what is slow.
+  return views.filter((view) => all || isWork(view)).slice(-limit).map((view) => toRow(view, now));
 }
+
+const allOption = {
+  all: z.boolean().default(false).describe('Include cheap reads such as /api/version and /api/tags'),
+};
 
 const proxy = defineCommand({
   meta: {
@@ -105,7 +111,9 @@ const proxy = defineCommand({
       await control.listen();
       const { host, port } = await beacon.listen();
       console.log(`proxy on http://${host}:${port} -> ${options.upstream}`);
-      console.log(`point clients to it: OLLAMA_URL=http://${host}:${port}`);
+      // No variable name here: OLLAMA_URL is this command's upstream, so suggesting it
+      // for clients invites a shell where the next proxy forwards to itself.
+      console.log(`point clients to http://${host}:${port}`);
       await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
     } catch (error) {
       throw new CommandError(error instanceof Error ? error.message : String(error), { code: 'PROXY_FAILED' });
@@ -128,10 +136,11 @@ const requests = defineCommand({
   options: {
     ...socketOption,
     limit: z.number().default(DEFAULT_LIMIT).describe('Most recent requests to show'),
+    ...allOption,
   },
   output: requestsOutput,
   async run({ options }) {
-    return { requests: await fromProxy(() => readRows(options.socket, options.limit)) };
+    return { requests: await fromProxy(() => readRows(options.socket, options.limit, options.all)) };
   },
   format: (result) => formatRequests(result.requests),
 });
@@ -162,20 +171,33 @@ const watch = defineCommand({
     ...socketOption,
     interval: z.number().default(1000).describe('Milliseconds between updates'),
     limit: z.number().default(DEFAULT_LIMIT).describe('Most recent requests to show'),
+    ...allOption,
   },
   async run({ options, signal }) {
     const client = createControlClient(options.socket);
-    const separator = process.stdout.isTTY ? CLEAR_SCREEN : '\n';
+    const live = process.stdout.isTTY === true;
+    let lastChange: string | null = null;
     while (!signal.aborted) {
       let screen: string;
+      // What counts as a change for a log: ages and token counts move every tick.
+      let change: string;
       try {
-        const [snapshot, rows] = await Promise.all([client.status(), readRows(options.socket, options.limit)]);
+        const [snapshot, rows] = await Promise.all([client.status(), readRows(options.socket, options.limit, options.all)]);
         screen = `${formatStatus(snapshot)}\n\n${formatRequests(rows)}`;
+        const models = snapshot.probe.reachable ? snapshot.probe.models.map((model) => model.name) : [];
+        change = JSON.stringify([snapshot.server, models, rows.map((row) => [row.id, row.state])]);
       } catch (error) {
         if (!(error instanceof ProxyNotRunning)) throw error;
         screen = `${error.message}\nwaiting for it to start...`;
+        change = screen;
       }
-      process.stdout.write(`${separator}${screen}\n`);
+      if (live) {
+        process.stdout.write(`${CLEAR_SCREEN}${screen}\n`);
+      } else if (change !== lastChange) {
+        // Piped or redirected: one frame per change, stamped, instead of one per tick.
+        process.stdout.write(`\n--- ${new Date().toISOString()}\n${screen}\n`);
+      }
+      lastChange = change;
       await new Promise<void>((resolve) => {
         const timer = setTimeout(resolve, options.interval);
         signal.addEventListener('abort', () => {

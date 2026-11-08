@@ -57,7 +57,11 @@ function table(headers: string[], rows: string[][]): string {
 
 export function formatStatus(snapshot: StatusSnapshot): string {
   const { server, probe } = snapshot;
-  if (!probe.reachable) return `server  ${server}\nprobe   ${probe.reason} (${probe.detail})`;
+  if (!probe.reachable) {
+    const lines = [`server  ${server}`, `probe   ${probe.reason} (${probe.detail})`];
+    if (probe.reason === 'bad_response') lines.push('note    something answers there, but not like ollama: loaded models are unknown');
+    return lines.join('\n');
+  }
 
   const lines = [`server  ${server}`, `ollama  ${probe.version}`];
   if (probe.models.length === 0) return [...lines, 'models  none loaded'].join('\n');

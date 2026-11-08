@@ -1,9 +1,19 @@
-import type { LoadedModel } from './ollama.ts';
+import type { LoadedModel, ProbeResult } from './ollama.ts';
 import type { RequestRecord } from './proxy.ts';
 import { detectTruncation, type TruncationResult } from './truncation.ts';
 
 export type RequestState = 'waiting' | 'generating' | 'stalled' | 'done' | 'cancelled' | 'failed';
-export type ServerState = 'down' | 'idle' | 'busy';
+/** `unknown`: something answers HTTP there, but not like ollama, so idle cannot be told apart. */
+export type ServerState = 'down' | 'idle' | 'busy' | 'unknown';
+
+/** What the probe says about the server, before looking at the traffic. */
+export type Health = 'up' | 'down' | 'foreign';
+
+export function health(probe: ProbeResult): Health {
+  if (probe.reachable) return 'up';
+  // An HTTP answer, even a 404, proves something is listening.
+  return probe.reason === 'bad_response' ? 'foreign' : 'down';
+}
 
 export interface RequestView extends RequestRecord {
   state: RequestState;
@@ -33,7 +43,8 @@ export const DEFAULT_STALL_AFTER_MS = 30_000;
 // server look busier than it is, never idle while it is working.
 const READ_ONLY_ROUTES = new Set(['/', '/api/version', '/api/ps', '/api/tags', '/api/show', '/v1/models']);
 
-function isWork(record: RequestRecord): boolean {
+/** Generation, embeddings, pulls: anything that is not a cheap read. */
+export function isWork(record: Pick<RequestRecord, 'path'>): boolean {
   return !READ_ONLY_ROUTES.has(record.path.split('?')[0] ?? record.path);
 }
 
@@ -78,9 +89,10 @@ export function viewRequests(records: RequestRecord[], now: number, options: Sta
 }
 
 /** Tokens arriving prove the server is alive, so they outrank a failed probe. */
-export function serverState(reachable: boolean, views: RequestView[]): ServerState {
+export function serverState(probe: Health, views: RequestView[]): ServerState {
   const work = views.filter((view) => view.outcome === 'in_flight' && isWork(view));
   if (work.some((view) => view.state === 'generating')) return 'busy';
-  if (!reachable) return 'down';
-  return work.length > 0 ? 'busy' : 'idle';
+  if (probe === 'down') return 'down';
+  if (work.length > 0) return 'busy';
+  return probe === 'up' ? 'idle' : 'unknown';
 }

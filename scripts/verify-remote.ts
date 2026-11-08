@@ -7,7 +7,7 @@ import { createControlClient } from '../src/core/control-client.ts';
 import { createControlServer } from '../src/core/control.ts';
 import { type LoadedModel, probe } from '../src/core/ollama.ts';
 import { createProxy, type RequestRecord } from '../src/core/proxy.ts';
-import { serverState, type RequestView, viewRequests } from '../src/core/state.ts';
+import { health, serverState, type RequestView, viewRequests } from '../src/core/state.ts';
 
 const UPSTREAM = process.env.OLLAMA_URL;
 if (!UPSTREAM) {
@@ -80,7 +80,7 @@ await unload(MLX);
 await unload(LLAMACPP);
 const idle = await probe(UPSTREAM);
 check('probe sees a healthy server', idle.reachable, idle.reachable ? idle.version : idle);
-check('server is idle', serverState(idle.reachable, viewRequests(proxy.requests(), Date.now())) === 'idle');
+check('server is idle', serverState(health(idle), viewRequests(proxy.requests(), Date.now())) === 'idle');
 
 // --- Streaming, queue hint, probe under load
 {
@@ -97,7 +97,7 @@ check('server is idle', serverState(idle.reachable, viewRequests(proxy.requests(
   const generating = lastView();
   check('stream is generating', generating.state === 'generating', { chunks: generating.chunks });
   check('probe answers during generation', during.reachable, { probeMs });
-  check('server is busy', serverState(during.reachable, viewRequests(proxy.requests(), Date.now())) === 'busy');
+  check('server is busy', serverState(health(during), viewRequests(proxy.requests(), Date.now())) === 'busy');
 
   const second = post('/api/chat', essay, secondAbort.signal).then(drain).catch(() => null);
   await sleep(500);
