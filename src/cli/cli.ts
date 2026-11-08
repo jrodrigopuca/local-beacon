@@ -16,7 +16,7 @@ const DEFAULT_LIMIT = 20;
 const socketOption = {
   socket: z.string().default(defaultSocketPath()).describe('Control socket of the proxy'),
 };
-const socketMeta = { socket: { env: 'LBEACON_SOCKET' } };
+const socketMeta = { socket: { env: 'LBEACON_SOCKET', defaultDescription: '~/.local-beacon/control.sock' } };
 
 const statusOutput = z.object({
   server: z.enum(['down', 'idle', 'busy']),
