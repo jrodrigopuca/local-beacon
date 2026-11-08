@@ -2,13 +2,20 @@
 
 Registro de lo que encuentra un usuario nuevo, según el
 [ADR-0003](docs/adr/0003-runa-como-terceros.md): fuentes públicas y comportamiento
-observado, sin leer el código. Versión evaluada: `0.2.0-beta.2`, con Node 26 y npm 12.
+observado, sin leer el código. Versión evaluada: `0.2.0-beta.2`, con Node 26 y npm 12; seguimiento hasta `0.2.0-beta.5`.
 Los resultados de `0.1.0` no cuentan.
 
 **Estado en `0.2.0-beta.3`:** F-01, F-02, F-03, F-04, F-06, F-09, F-10 y F-12 quedaron
 resueltas. F-05, F-07, F-08, F-11, F-13 y F-14 siguen abiertas. Detalle en
 [`docs/feedback-runa-0.2.0-beta.3.md`](docs/feedback-runa-0.2.0-beta.3.md). Las entradas de
 abajo describen lo observado en beta.2.
+
+**Estado en `0.2.0-beta.5`:** la actualización no pidió cambios de código. F-08 y F-13
+quedaron resueltas: el error nombra `OLLAMA_URL` y `defaultDescription` oculta el home.
+F-14 se cerró sin cambios, porque en 12 corridas con un modelo real la redacción no cambió
+el comportamiento. F-11 se cerró por decisión de runa-cmd, ya que `format` cubre el caso.
+Siguen abiertas F-05, que se comprueba al publicar la 1.0, y F-07, que es lo próximo de
+runa-cmd y tiene una medición en launchd en su entrada.
 
 Nivel: **alto** condiciona el diseño, **medio** obliga a un rodeo, **bajo** es una
 molestia. El código de la prueba está en cada entrada cuando hace falta.
@@ -91,6 +98,17 @@ molestia. El código de la prueba está en cada entrada cuando hace falta.
   ordenadamente. La salida está documentada; el mensaje, no.
 - **Duda:** en un servicio, Ctrl+C es la forma normal de pararlo. ¿Se puede evitar
   `Interrupted.`?
+- **En launchd (beta.5, macOS 27.0.1):** probé `lbeacon proxy` como LaunchAgent, parado
+  con `launchctl kill`.
+  - **Sin `KeepAlive`:** registra `last exit code = 143` ante SIGTERM y `130` ante SIGINT,
+    escribe `Interrupted.` en el log de stderr, y no reinicia.
+  - **Con `KeepAlive` → `SuccessfulExit: false`,** la opción para "reiniciar solo si falla":
+    una parada limpia por SIGTERM **se reinicia**, porque 143 no es éxito. Un proceso de
+    control que sale con 0 ante la misma señal no se reinicia.
+  - **En los dos casos:** `cleanup` borró el socket.
+
+  Con esa opción, entonces, un servicio de Runa no se puede parar desde afuera sin que
+  launchd lo vuelva a levantar. systemd no lo probé, porque no tengo Linux.
 
 ### F-08 · bajo · El error por opción faltante no menciona su variable de entorno
 
