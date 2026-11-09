@@ -231,7 +231,12 @@ export const cli = defineCLI({
       instructions: 'These tools need the proxy running. Call `status` first; prefer it over guessing why a model is slow.',
       tools: {
         status: { annotations: { readOnlyHint: true } },
-        requests: { annotations: { readOnlyHint: true } },
+        requests: {
+          // Said here because the model writes code against this text, not against the output schema.
+          description:
+            'List the most recent requests and their state. `total` is how many there are before `limit` cuts the list: report it, not the length of `requests`.',
+          annotations: { readOnlyHint: true },
+        },
         cancel: {
           description: 'Cut a request in flight. What it generated so far is lost.',
           annotations: { destructiveHint: true },
