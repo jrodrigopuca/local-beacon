@@ -86,8 +86,9 @@ function tokens(row: RequestRow): string {
   return `${row.promptTokens}/${row.outputTokens ?? '-'}`;
 }
 
-export function formatRequests(rows: RequestRow[]): string {
+export function formatRequests(rows: RequestRow[], total = rows.length): string {
   if (rows.length === 0) return 'no requests yet';
+  const shown = total > rows.length ? `\n\nshowing the last ${rows.length} of ${total}; --limit shows more` : '';
   const body = rows.map((row) => [
     row.id,
     row.state,
@@ -99,9 +100,9 @@ export function formatRequests(rows: RequestRow[]): string {
   ]);
   const output = table(['ID', 'STATE', 'MODEL', 'AGE', 'IN/OUT', 'TOK/S', ''], body);
   const truncated = rows.filter((row) => row.truncation === 'likely');
-  if (truncated.length === 0) return output;
+  if (truncated.length === 0) return `${output}${shown}`;
   const warnings = truncated.map(
     (row) => `warning: ${row.id} was probably truncated (${row.promptTokens} tokens reached the model)`,
   );
-  return `${output}\n\n${warnings.join('\n')}`;
+  return `${output}${shown}\n\n${warnings.join('\n')}`;
 }

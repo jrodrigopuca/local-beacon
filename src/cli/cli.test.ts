@@ -163,8 +163,12 @@ describe('lbeacon', () => {
       });
     }
     const result = await lbeacon(['requests', '--json', '--limit', '2'], { LBEACON_SOCKET: socket });
-    const { requests } = JSON.parse(result.stdout) as { requests: Array<{ path: string }> };
+    const { requests, total } = JSON.parse(result.stdout) as { requests: Array<{ path: string }>; total: number };
     assert.deepEqual(requests.map((row) => row.path), ['/b', '/c']);
+    // The model needs this to tell "2 shown" from "2 happened".
+    assert.equal(total, 3);
+    const text = await lbeacon(['requests', '--limit', '2'], { LBEACON_SOCKET: socket });
+    assert.match(text.stdout, /showing the last 2 of 3/);
   });
 
   it('stops the proxy cleanly on SIGINT and removes its socket', async () => {

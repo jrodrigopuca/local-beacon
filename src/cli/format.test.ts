@@ -70,6 +70,12 @@ describe('formatRequests', () => {
     assert.equal(lines[1]?.indexOf('qwen3.5:4b'), lines[2]?.indexOf('qwen3.5:4b'));
   });
 
+  it('says when the list is cut, and not when it is whole', () => {
+    assert.match(formatRequests([row()], 48), /showing the last 1 of 48; --limit shows more/);
+    assert.doesNotMatch(formatRequests([row()], 1), /showing/);
+    assert.doesNotMatch(formatRequests([row()]), /showing/);
+  });
+
   it('explains why a request is waiting, stalled or failed', () => {
     assert.match(formatRequests([row({ ahead: 2 })]), /2 ahead/);
     assert.match(formatRequests([row({ state: 'stalled', silentForMs: 31_000 })]), /silent 31\.0s/);

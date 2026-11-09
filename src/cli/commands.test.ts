@@ -61,7 +61,7 @@ describe('commands', () => {
     const text = await testCLI(cli, ['requests'], { env });
     assert.equal(text.code, 0);
     assert.match(text.stdout, /no requests yet/);
-    assert.deepEqual(text.result, { requests: [] });
+    assert.deepEqual(text.result, { requests: [], total: 0 });
 
     const json = await testCLI(cli, ['requests', '--json'], { env });
     assert.deepEqual(JSON.parse(json.stdout), text.result);
@@ -108,10 +108,13 @@ describe('commands', () => {
     assert.equal((status.result as { server: string }).server, 'unknown');
     assert.match(status.stdout, /not like ollama/);
 
-    const work = (await testCLI(cli, ['requests'], { env })).result as { requests: Array<{ path: string }> };
+    type Listing = { requests: Array<{ path: string }>; total: number };
+    const work = (await testCLI(cli, ['requests'], { env })).result as Listing;
     assert.deepEqual(work.requests.map((row) => row.path), ['/v1/chat/completions']);
-    const all = (await testCLI(cli, ['requests', '--all'], { env })).result as { requests: Array<{ path: string }> };
+    assert.equal(work.total, 1);
+    const all = (await testCLI(cli, ['requests', '--all'], { env })).result as Listing;
     assert.deepEqual(all.requests.map((row) => row.path), ['/v1/models', '/v1/chat/completions']);
+    assert.equal(all.total, 2);
   });
 
   it('keeps concurrent runs apart', async () => {

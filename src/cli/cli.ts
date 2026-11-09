@@ -63,6 +63,8 @@ const requestsOutput = z.object({
       errorCode: z.string().nullable(),
     }),
   ),
+  // Without it, a model reads the default limit as the number of requests.
+  total: z.number().describe('Requests the proxy remembers that match, before the limit cuts the list'),
 });
 
 /** A proxy that is not running is an expected answer, not a crash. */
@@ -81,11 +83,12 @@ async function fromProxy<T>(call: () => Promise<T>): Promise<T> {
   }
 }
 
-async function readRows(socket: string, limit: number, all: boolean): Promise<RequestRow[]> {
+async function readRows(socket: string, limit: number, all: boolean): Promise<{ requests: RequestRow[]; total: number }> {
   const now = Date.now();
   const views = await createControlClient(socket).requests();
   // Clients poll /api/version or /api/tags around every run: noise when asking what is slow.
-  return views.filter((view) => all || isWork(view)).slice(-limit).map((view) => toRow(view, now));
+  const matching = views.filter((view) => all || isWork(view));
+  return { requests: matching.slice(-limit).map((view) => toRow(view, now)), total: matching.length };
 }
 
 const allOption = {
@@ -141,9 +144,9 @@ const requests = defineCommand({
   },
   output: requestsOutput,
   async run({ options }) {
-    return { requests: await fromProxy(() => readRows(options.socket, options.limit, options.all)) };
+    return fromProxy(() => readRows(options.socket, options.limit, options.all));
   },
-  format: (result) => formatRequests(result.requests),
+  format: (result) => formatRequests(result.requests, result.total),
 });
 
 const cancel = defineCommand({
@@ -183,8 +186,11 @@ const watch = defineCommand({
       // What counts as a change for a log: ages and token counts move every tick.
       let change: string;
       try {
-        const [snapshot, rows] = await Promise.all([client.status(), readRows(options.socket, options.limit, options.all)]);
-        screen = `${formatStatus(snapshot)}\n\n${formatRequests(rows)}`;
+        const [snapshot, { requests: rows, total }] = await Promise.all([
+          client.status(),
+          readRows(options.socket, options.limit, options.all),
+        ]);
+        screen = `${formatStatus(snapshot)}\n\n${formatRequests(rows, total)}`;
         const models = snapshot.probe.reachable ? snapshot.probe.models.map((model) => model.name) : [];
         change = JSON.stringify([snapshot.server, models, rows.map((row) => [row.id, row.state])]);
       } catch (error) {
