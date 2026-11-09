@@ -15,7 +15,8 @@ const EXIT_NOT_IN_FLIGHT = 4;
 const DEFAULT_LIMIT = 20;
 
 const socketOption = {
-  socket: z.string().default(defaultSocketPath()).describe('Control socket of the proxy'),
+  // min(1): an exported but empty LBEACON_SOCKET is a mistake, not a path.
+  socket: z.string().min(1).default(defaultSocketPath()).describe('Control socket of the proxy'),
 };
 const socketMeta = { socket: { env: 'LBEACON_SOCKET', defaultDescription: '~/.local-beacon/control.sock' } };
 

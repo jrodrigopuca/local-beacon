@@ -41,6 +41,12 @@ describe('commands', () => {
     }
   });
 
+  it('rejects an empty LBEACON_SOCKET instead of using it as a path', async () => {
+    const result = await testCLI(cli, ['status'], { env: { LBEACON_SOCKET: '' } });
+    assert.equal(result.code, 2);
+    assert.match(result.stderr, /--socket/);
+  });
+
   it('asks for an upstream, and rejects an invalid one', async () => {
     const socket = socketPath();
     assert.equal((await testCLI(cli, ['proxy', '--socket', socket], { env: { OLLAMA_URL: '' } })).code, 2);
